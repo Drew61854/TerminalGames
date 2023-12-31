@@ -19,6 +19,10 @@ Is it a game of luck, or a game of strategy? Nobody knows! Fish for books and at
 
 The most complicated game you've never played, try to bluff or play it straight in this dice-based gambling game. You might be able to make it past the rules, but can you come out with your dice in your hand, or will you end up pennyless? 
 
+## Salvage Synergy
+
+Do you miss the danger involved in being out of the ship? Do you wish you could explore dark corridors marked with the smell of death instead of living in the safety and air-conditioning of your ship? Then try out Salvage Synergy, a text-based adventure game about you--yes, you--and your job of scavenging for The Company! With our revolutionary strides in technology, you can play some Salvage Synergy, take a quick break to help your coworkers, and then come back and resume your game, with all your data intact! Can you escape the facility? 
+
 ## More to Come
 
-Since the launch of the program The Company has invested even more money (half a caesar salad) into providing enriching entertainment for our valued employees. Stay tuned for improvements to the current games and possibly even more in the future.
+The Company has chosen a more...direct approach to motivating us developers to create more content for our entertainment starved employees. That's why we've put our blood, sweat and tears (emphasis on the tears part) into this latest edition! We hope you enjoy it as much as we enjoy still breathing, and have a happy New Year!
