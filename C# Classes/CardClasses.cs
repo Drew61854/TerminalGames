@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,12 +15,14 @@ namespace TerminalGames
         public class BJCard //Card class for BJ. Multiple decks, so more than four of the same number is okay.
         {
             public int randoCard;
+            public int randoSuit;
             public string valueRep;
             Terminal theTerminal;
             public int cardValue = 10; //The BJ value. 10 by default, if not a face it updates.
             public BJCard() //For making a new card in blackjack
             {
                 randoCard = Random.Range(1, 14); //Chooses the card's value
+                randoSuit = Random.Range(1, 5); //Chooses the card's suit, 1 is diamonds 2 is hearts 3 is clubs and 4 is spades.
                 switch (randoCard)
                 {
                     case 1:
@@ -205,6 +207,139 @@ namespace TerminalGames
             }
 
             return false; // No book found
+        }
+
+        public static string DisplayCards(List<int> numbers, List<int> suits) //Displays cards as ASCII representations.
+        {
+            int line = 0;
+            string[] stringPieces =
+                { "╔═════╗",
+                  "║     ║",
+                  "║     ║", //Blank template for cards to be drawn on. I dont want to redraw this a hundred times.
+                  "║     ║",
+                  "╚═════╝"
+                };
+            string[] tempString =
+                {
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                };
+            for (int i = 0; i < suits.Count; i++) //If anybody downloads this code and has a better way to do this, let me know on Github. Cuz this sucks ngl. But I'm big dumb and can't think of a better way.
+            {
+                int tempSuit = suits[i];
+                int tempNumber = numbers[i];
+                string displayValue;
+                bool isTen = false;   //Ten is my least favorate number now. 
+                if (i < suits.Count)
+                    line = i / 4;
+                else   //God help me if someone gets more than 39 cards in Go Fish. Is that even possible?
+                    line = 7;
+                tempString[line * 5] += stringPieces[0];
+                tempString[(line * 5) + 4] += stringPieces[4];
+                int symbolIndex = line * 5 + 2;
+                switch (tempSuit)
+                {
+                    case 1:
+                        tempString[symbolIndex] += "║  <size=40>\u2666</size>  <mspace=-1>║</mspace><mspace=4>  </mspace>";   //The symbols are really small for some reason so I make them a tiny bit bigger
+                        break;
+
+                    case 2:
+                        tempString[symbolIndex] += "║  <size=40>\u2665</size>  <mspace=-1>║</mspace><mspace=4>  </mspace>";
+                        break;
+
+                    case 3:
+                        tempString[symbolIndex] += "║  <size=40>\u2663</size>  <mspace=-1>║</mspace><mspace=4>  </mspace>";
+                        break;
+
+                    default:
+                        tempString[symbolIndex] += "║  <size=40>\u2660</size>  <mspace=-1>║</mspace><mspace=4>  </mspace>";
+                        break;
+                }
+                switch (tempNumber)
+                {
+                    case 1:
+                        displayValue = "A";
+                        break;
+                    case 10: //The problem child. God damn two character bullshit.
+                        displayValue = "10";
+                        isTen = true;
+                        break;
+                    case 11:
+                        displayValue = "J";
+                        break;
+                    case 12:
+                        displayValue = "Q";
+                        break;
+                    case 13:
+                        displayValue = "K";
+                        break;
+                    default:
+                        displayValue = tempNumber.ToString();
+                        break;
+                }
+                int valueIndexOne = line * 5 + 1;
+                int valueIndexTwo = line * 5 + 3;
+                if (!isTen)
+                {
+                    tempString[valueIndexOne] += "║" + displayValue + "    ║";
+                    tempString[valueIndexTwo] += "║    " + displayValue + "║";
+                }
+                else
+                {
+                    tempString[valueIndexOne] += "║" + displayValue + "   ║";
+                    tempString[valueIndexTwo] += "║   " + displayValue + "║";
+                }
+            }
+            string returnString = "<size=26>";
+            for (int nextLine = 0; nextLine <= line;  nextLine++) 
+            {
+                int tempIndex = nextLine * 5;
+                returnString += tempString[tempIndex] + "\n" + tempString[tempIndex + 1] + "\n" + tempString[tempIndex + 2] + "\n" + tempString[tempIndex + 3] + "\n" + tempString[tempIndex + 4];
+                returnString += "\n";
+            }
+            returnString += "</size>\n";
+            return returnString;
+
+            /*
+                    ╔═════╗
+                    ║ 2   ║
+                    ║  ♦  ║
+                    ║   2 ║
+                    ╚═════╝
+            */
         }
     }
 }
