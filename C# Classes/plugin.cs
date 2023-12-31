@@ -1,4 +1,4 @@
-﻿using BepInEx;
+using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
 using MammalOS.API;
@@ -26,6 +26,7 @@ using static ConsoleGames.DiceClasses;
 using UnityEngine.InputSystem.HID;
 using Steamworks;
 using System.Security.Principal;
+using static UnityEngine.GraphicsBuffer;
 
 
 
@@ -40,7 +41,7 @@ namespace TerminalGames
         //Initialize vars for BepIn
         private const string modGUID = "Mammal.TerminalGames";
         private const string modName = "Terminal_Games";
-        private const string modVersion = "1.1.0";
+        private const string modVersion = "1.2.0";
         //Initializing patch vars
         private static ConsoleGamesMain Instance;
         internal ManualLogSource logSource;
@@ -52,11 +53,16 @@ namespace TerminalGames
         public static bool playingGoFish = false;
         public static bool bettingDice = false;
         public static bool playingDice = false;
+        public static bool playingAdventure = false;
         //Vars for BJ
         public static List<string> bjWords = new List<string>() { "blackjack", "bj", "black", "bet", "confirm", "stand" };
         public static int currentBet = 0;
         public static List<BJCard> dealerBJCards = new List<BJCard>();
         public static List<BJCard> playerBJCards = new List<BJCard>();
+        public static List<int> displayPlayerCardVals = new List<int>();
+        public static List<int> displayPlayerCardSuits = new List<int>();
+        public static List<int> displayDealerCardVals = new List<int>();
+        public static List<int> displayDealerCardSuits = new List<int>();
         //Vars for Go Fish
         public static string finalDisplay;
         public static List<OneDeckCard> dealerODCards = new List<OneDeckCard>();
@@ -64,6 +70,7 @@ namespace TerminalGames
         public static int playerBooks = 0;
         public static int dealerBooks = 0;
         public static int lastCardAsked = -1;
+        public static List<int> bookedCards;
         public static DeckOfCards deck;
         public static List<string> cardNames = new List<string>() { "ace", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "jack", "queen", "king" };
         //Vars for Numbers
@@ -75,7 +82,31 @@ namespace TerminalGames
         public static List<string> listString = new List<string>();
         public static int lastBidValue = 0;
         public static int lastBidCount = 0;
+        //Vars for Salvager
+        public static int gameState;
+            //Int vars because PlayerPrefs don't save bools. 0 is false 1 is true.
+        public static int door0;    
+        public static int door3;
+        public static int door5;
+        public static int door12;
+        public static int door12Locked;
+        public static int flashlight;
+        public static int ladder;
+        public static int remote;
+        public static int landmine;
+        public static int turret;
+        public static int key;
+        public static int keyGiven;
+        public static int arm;
+        public static int fuse1;
+        public static int fuse2;
+        public static int fuse3;
+        public static int fuse4;
+        public static int bodyMoved;
+        public static int[] insertedFuses = {0, 0, 0, 0};
 
+        public static int area;
+        public static string[] inventory = {"Empty", "Empty", "Empty", "Empty"};
         //Stat vars
         public static int bjGames;
         public static int bjWins;
@@ -106,7 +137,7 @@ namespace TerminalGames
                 Description = "Begin the game.",
                 HasDynamicInput = true,
                 HideFromCommandList = true,
-                Method = BetConfirmed,
+                Method = BlackjackMethods.BetConfirmed,
             };
 
             SimpleCommandModule bet = new SimpleCommandModule()
@@ -116,7 +147,7 @@ namespace TerminalGames
                 HasDynamicInput = true,
                 Arguments = new string[] { "'bet'", "number of credits" },
                 HideFromCommandList = true,
-                Method = ConfirmBet,
+                Method = BlackjackMethods.ConfirmBet,
             };
 
             SimpleCommandModule betDenied = new SimpleCommandModule()
@@ -125,7 +156,7 @@ namespace TerminalGames
                 Description = "Do not begin the game.",
                 HasDynamicInput = true,
                 HideFromCommandList = true,
-                Method = DenyBet,
+                Method = BlackjackMethods.DenyBet,
             };
             //Begin Dice modules
             SimpleCommandModule diceBegin = new SimpleCommandModule()
@@ -169,7 +200,7 @@ namespace TerminalGames
                 Description = "get no more cards",
                 HasDynamicInput = true,
                 HideFromCommandList = true,
-                Method = StandBlackJack,
+                Method = BlackjackMethods.StandBlackJack,
             };
 
             SimpleCommandModule blackjackHit = new SimpleCommandModule()
@@ -178,7 +209,16 @@ namespace TerminalGames
                 Description = "get another card",
                 HasDynamicInput = true,
                 HideFromCommandList = true,
-                Method = HitBlackJack,
+                Method = BlackjackMethods.HitBlackJack,
+            };
+
+            SimpleCommandModule blackjackDouble = new SimpleCommandModule()
+            {
+                DisplayName = "double",
+                Description = "get another card and double",
+                HasDynamicInput = true,
+                HideFromCommandList = true,
+                Method = BlackjackMethods.DoubleBlackJack,
             };
 
             SimpleCommandModule blackjack = new SimpleCommandModule()
@@ -188,7 +228,7 @@ namespace TerminalGames
                 HasDynamicInput = false,
                 Abbreviations = new string[] { "bj", "black" },
                 HideFromCommandList = true,
-                Method = BetBlackjack,
+                Method = BlackjackMethods.BetBlackjack,
             };
             //End BlackJack modules
 
@@ -215,6 +255,82 @@ namespace TerminalGames
             };
             //End Numbers modules
 
+            //Begin Adventure modules
+            SimpleCommandModule adventureBegin = new SimpleCommandModule()
+            {
+                DisplayName = "salvager",
+                Description = "Begin the epic.",
+                HasDynamicInput = false,
+                HideFromCommandList = true,
+                Method = AdventureMethods.LoadGame,
+            };
+            SimpleCommandModule adventureActions = new SimpleCommandModule()
+            {
+                DisplayName = "actions",
+                Description = "lists actions",
+                HasDynamicInput = false,
+                HideFromCommandList = true,
+                Method = AdventureMethods.Actions,
+            };
+            SimpleCommandModule adventureWalk = new SimpleCommandModule()
+            {
+                DisplayName = "walk",
+                Description = "travels to a location",
+                HasDynamicInput = true,
+                HideFromCommandList = true,
+                Method = AdventureMethods.Walk,
+            };
+            SimpleCommandModule adventureGrab = new SimpleCommandModule()
+            {
+                DisplayName = "grab",
+                Description = "takes an item",
+                HasDynamicInput = true,
+                Abbreviations = new string[] {"take"}, 
+                HideFromCommandList = true,
+                Method = AdventureMethods.GrabItem,
+            };
+            SimpleCommandModule adventureUse = new SimpleCommandModule()
+            {
+                DisplayName = "use",
+                Description = "uses an item",
+                HasDynamicInput = true,
+                HideFromCommandList = true,
+                Method = AdventureMethods.UseItem,
+            };
+            SimpleCommandModule adventureInventory = new SimpleCommandModule()
+            {
+                DisplayName = "inventory",
+                Description = "lists items in inventory",
+                HasDynamicInput = false,
+                HideFromCommandList = true,
+                Method = AdventureMethods.Inventory,
+            };
+            SimpleCommandModule adventureInspect = new SimpleCommandModule()
+            {
+                DisplayName = "inspect",
+                Description = "inspects area or item",
+                HasDynamicInput = true,
+                HideFromCommandList = true,
+                Method = AdventureMethods.Inspect,
+            };
+            SimpleCommandModule adventurePush = new SimpleCommandModule()
+            {
+                DisplayName = "push",
+                Description = "pushes the body",
+                HasDynamicInput = true,
+                HideFromCommandList = true,
+                Method = AdventureMethods.Push,
+            };
+            SimpleCommandModule adventureRestart = new SimpleCommandModule()
+            {
+                DisplayName = "restart",
+                Description = "resets the game",
+                HasDynamicInput = false,
+                HideFromCommandList = true,
+                Method = AdventureMethods.Restart,
+            };
+            //End Adventure modules
+
             //Begin misc modules
             SimpleCommandModule gameList = new SimpleCommandModule()
             {
@@ -238,9 +354,9 @@ namespace TerminalGames
             SimpleCommandModule rulesScreen = new SimpleCommandModule()
             {
                 DisplayName = "rules",
-                Description = "displays the rules to a game",
+                Description = "Displays a game's rules.\nType 'rules [game name]' for information.",
                 HasDynamicInput = true,
-                HideFromCommandList = true,
+                HideFromCommandList = false,
                 Abbreviations = null,
                 Method = RulesScreen,
             };
@@ -254,7 +370,7 @@ namespace TerminalGames
                 Abbreviations = new string[] { "fish", "gofish" },
                 HasDynamicInput = false,
                 HideFromCommandList = true,
-                Method = BeginGoFish,
+                Method = GoFishMethods.BeginGoFish,
             };
 
             SimpleCommandModule requestGoFish = new SimpleCommandModule()
@@ -264,7 +380,7 @@ namespace TerminalGames
                 Arguments = new string[] { "request", "card" },
                 HasDynamicInput = true,
                 HideFromCommandList = true,
-                Method = RequestGoFish,
+                Method = GoFishMethods.RequestGoFish,
             };
 
 
@@ -276,6 +392,7 @@ namespace TerminalGames
             AddSimpleCommand(betDenied);
             AddSimpleCommand(blackjackHit);
             AddSimpleCommand(blackjackStand);
+            AddSimpleCommand(blackjackDouble);
             AddSimpleCommand(beginNumbers);
             AddSimpleCommand(guessNumbers);
             AddSimpleCommand(goFish);
@@ -286,13 +403,22 @@ namespace TerminalGames
             AddSimpleCommand(diceChallenge);
             AddSimpleCommand(rulesScreen);
             AddSimpleCommand(statsScreen);
+            AddSimpleCommand(adventureBegin);
+            AddSimpleCommand(adventureActions);
+            AddSimpleCommand(adventureInventory);
+            AddSimpleCommand(adventureGrab);
+            AddSimpleCommand(adventureUse);
+            AddSimpleCommand(adventurePush);
+            AddSimpleCommand(adventureWalk);
+            AddSimpleCommand(adventureInspect);
+            AddSimpleCommand(adventureRestart);
             harmony.PatchAll(typeof(ConsoleGamesMain));
 
         }
         //Begin misc methods
         public static TerminalNode ListGames(Terminal __terminal)
         {
-            TerminalNode listNode = CreateTerminalNode(">BlackJack\nGamble your credits! Play responsibly.\n\n>Numbers\nCan you guess a number 1-1000 in 10 or less guesses?\n\n>GoFish\nAll of the fishing, none of the going. Got any sevens?\n\n>LiarsDice\nCan you bluff your way to victory?\n\nFor rules to any game, type 'rules [gamename]', ex. 'rules gofish'.\n\n");
+            TerminalNode listNode = CreateTerminalNode(">BlackJack\nGamble your credits! Play responsibly.\n\n>Numbers\nCan you guess a number 1-1000 in 10 or less guesses?\n\n>GoFish\nAll of the fishing, none of the going. Got any sevens?\n\n>LiarsDice\nCan you bluff your way to victory?\n\n>Salvager\nCan you find your way through the labyrinth?\n\n");
             listNode.clearPreviousText = true;
             return listNode;
         }
@@ -380,6 +506,8 @@ namespace TerminalGames
         public static TerminalNode BeginDice(Terminal __terminal)
         {
             bettingDice = true;
+            bettingBJ = false;
+            playingAdventure = false;
             TerminalNode returnNode = CreateTerminalNode("How good's your bluffing skills?\nEnter how much you'd like to bet by typing 'bet [amount]'.\n\n");
             returnNode.clearPreviousText = true;
             return returnNode;
@@ -483,8 +611,77 @@ namespace TerminalGames
             }
         }
 
+        public static int CheatLevel(int AIDiff, int value)
+        {
+            int expectedDice = 0;
+            if (AIDiff < 25) //No cheating, just speculation
+            {
+                Debug.Log("No cheating");
+                if (playerDice.Count > 3) //Gives the benefit of the doubt to promote less challenges.
+                    expectedDice++;
+                if (playerDice.Count == 5)
+                    expectedDice++;
+            }
+            else if (AIDiff < 50) //Looks at one of the player's dice.
+            {
+                if (playerDice[Random.Range(0, playerDice.Count)].faceValue == value)
+                    expectedDice++;
+                Debug.Log("Cheating a little.");
+            }
+            else if (AIDiff < 65 && playerDice.Count > 1) //Looks(if possible) at two of the player's dice.
+            {
+                Debug.Log("Cheating more");
+                int index1 = Random.Range(0, playerDice.Count);
+                int index2 = index1 - 1;
+                if (index1 - 1 >= 0)
+                {
+                    index2 = index1 + 1;
+                }
+                if (playerDice[Random.Range(0, playerDice.Count)].faceValue == value)
+                    expectedDice++;
+            }
+            else //Just completely cheats. Absolutely violates the integredy of the game.
+            {
+                Debug.Log("Cheating a lot");
+                for (int i = 0; i < playerDice.Count; i++)
+                {
+                    if (playerDice[Random.Range(0, playerDice.Count)].faceValue == value)
+                        expectedDice++;
+                }
+            }
+            return expectedDice;
+        }
+
+        public static bool OverrideChallenge(string count)
+        {
+            List<int> values = new List<int>();
+            for (int i = 0; i < dealerDice.Count; i++)
+            {
+                values.Add(dealerDice[i].faceValue);
+            }
+            var filteredNumbers = values
+                    .GroupBy(num => num)
+                    .Where(group => group.Count() > lastBidCount)
+                    .Select(group => group.Key);
+            int bestBid = filteredNumbers
+                .OrderBy(num => values.Count(n => n == num))
+                .FirstOrDefault();
+            int numCount = 0;
+            for (int i = 0; i < dealerDice.Count; i++)
+            {
+                if (dealerDice[i].faceValue == bestBid)
+                    numCount++;
+            }
+            if (numCount > TranslateString(count))
+                return true;
+            return false;
+        }
         public static bool ShouldChallenge(int value, string count)
         {
+            if (OverrideChallenge(count)) //If the CPU has a bet locked in larger than the current bet, it shouldn't challenge. No reason.
+            {
+                return false;
+            }
             int expectedDice = 0;
             for (int i = 0; i < dealerDice.Count; i++)
             {
@@ -493,10 +690,8 @@ namespace TerminalGames
                     expectedDice++;
                 }
             }
-            if (playerDice.Count > 3) //Gives the benefit of the doubt to promote less challenges.
-                expectedDice++;
-            if (playerDice.Count == 5)
-                expectedDice++;
+            int AIDiff = Random.Range(1, 101); //Determines if and how much the AI can cheat. The AI is honestly so stupid and players can beat it like 75% of the time even with it cheating.
+            expectedDice += CheatLevel(AIDiff, value);
             if (expectedDice < TranslateString(count)) //If the expected count of that number is less than what is bid, challenge.
                 return true;
             return false;  //If not, accept.
@@ -702,250 +897,13 @@ namespace TerminalGames
         }
         //End Dice methods
         
-        //Begin Go Fish methods
-        public static TerminalNode BeginGoFish(Terminal __terminal)
-        {
-            string finalDisplay = "May the best fisher win!\n\nYour hand: ";
-            playerODCards.Clear();
-            dealerODCards.Clear();
-            deck = new DeckOfCards();
-            for (int x = 0; x < 7; x++)
-            {
-                playerODCards.Add(deck.Draw());
-                dealerODCards.Add(deck.Draw());
-            }
-            playingGoFish = true;
-            List<OneDeckCard> sortedPlayerHand = playerODCards.OrderBy(card => card.cardValue).ToList();
-            for (int i = 0; i < playerODCards.Count - 1; i++)
-            {
-                finalDisplay += sortedPlayerHand[i].valueRep + " of " + sortedPlayerHand[i].suitRep + ", ";
-            }
-            finalDisplay += "and " + sortedPlayerHand[playerODCards.Count - 1].valueRep + " of " + sortedPlayerHand[playerODCards.Count - 1].suitRep;
-            finalDisplay += ".\n\nIt's your turn, request a card from your opponent. (Format 'request [card]' in words)\n\n";
-            TerminalNode returnNode = CreateTerminalNode(finalDisplay);
-            returnNode.clearPreviousText = true;
-            return returnNode;
-        }
-
-        public static TerminalNode RequestGoFish(Terminal __terminal)  
-        {                                                            
-            finalDisplay = "You asked for ";
-            string input = SimpleCommand.API.SimpleCommand.GetInputValue(__terminal); 
-            input = input.ToLower(); 
-            input = input.Substring(8);
-            TerminalNode returnNode;
-            if (playingGoFish)
-            {
-                int numCards = 0;
-                if (PlayerTurn(input)) //PlayerTurn returns false if it cannot parse the input. If it does not return false it handles all of the player's turn.
-                {
-                    if (playingGoFish)  //If the game didn't end on the player's turn
-                        OpponentTurn(); //Handles the opponents turn.
-                }
-                returnNode = CreateTerminalNode(finalDisplay);
-                returnNode.clearPreviousText = true;
-                return returnNode;
-            }
-            else
-            {
-                finalDisplay = "There was an issue with your request.\n\n";
-            }
-            returnNode = CreateTerminalNode(finalDisplay);
-            returnNode.clearPreviousText = true;
-            return returnNode;
-        }
-
-        private static bool PlayerTurn(string input)
-        {
-            TerminalNode returnNode;
-            if (!cardNames.Contains(input))
-            {
-                finalDisplay = "There was an issue with what you requested. Please try again (format 'request [card]' in words)\n\n";
-                return false;
-            }
-            int numCards = HandlePlayerTurn(input);
-            HandlePostTurn(numCards);
-            return true;
-        }
-
-        private static int HandlePlayerTurn(string input)
-        {
-            int numCards = 0;
-            for (int i = dealerODCards.Count - 1; i >= 0; i--)
-            {
-                if (dealerODCards.Count != 0 && dealerODCards[i].valueRep.Substring(4).ToLower().Equals(input))
-                {
-                    numCards++;
-                    playerODCards.Add(dealerODCards[i]);
-                    dealerODCards.RemoveAt(i);
-                }
-            }
-
-            finalDisplay += input + "s. Your opponent had " + numCards;
-            return numCards;
-        }
-
-        private static void HandlePostTurn(int numCards)
-        {
-            if (numCards == 0 && CardRemaining(deck))
-            {
-                playerODCards.Add(deck.Draw());
-                finalDisplay += "\n\nGo fish! You drew " + playerODCards[playerODCards.Count - 1].valueRep + " of " + playerODCards[playerODCards.Count - 1].suitRep;
-            }
-            else if (numCards == 0 && !CardRemaining(deck))
-            {
-                finalDisplay += "\n\nNo more cards in the deck!";
-            }
-
-            if (HasABook(false))
-            {
-                finalDisplay += "\nYou completed a book! That makes " + playerBooks + " for you, and " + dealerBooks + " for your opponent.\n\n";
-            }
-
-            if (!CardRemaining(deck) && (dealerODCards.Count + playerODCards.Count == 0))
-            {
-                finalDisplay += GetGameResultMessage();
-                playingGoFish = false;
-                
-            }
-        }
-
-        private static string GetGameResultMessage()
-        {
-            string resultMessage = "That's game! With a final score of " + playerBooks + " books to " + dealerBooks + ", ";
-            resultMessage += (playerBooks > dealerBooks) ? "you win!\n\n" : "your opponent wins! Better luck next time.\n\n";
-            fishGames++;
-            if (playerBooks > dealerBooks)
-            {
-                fishWins++;
-                PlayerPrefs.SetInt("FishWins", fishGames);
-            }
-            averageBooks = averageBooks + playerBooks;
-            PlayerPrefs.SetInt("FishGames", fishGames); PlayerPrefs.SetInt("AvgBooks", averageBooks);
-            return resultMessage;
-        }
-
-        private static void OpponentTurn()
-        {
-            int seed = Random.Range(1, 11);
-            int askFor = Random.Range(0, dealerODCards.Count);
-            askFor = GoFishAI(askFor, seed);
-            string askForRep = GetCardRepresentation(askFor);
-
-            finalDisplay += "\nIt's your opponent's turn. They ask for " + askForRep;
-            int secondNumCards = HandleOpponentTurn(askFor);
-            HandlePostOpponentTurn(secondNumCards);
-        }
-
-        private static int GoFishAI(int original, int seed)
-        {
-            if (seed <= 8)
-            {
-                if (original >= 0 && original < dealerODCards.Count)
-                {
-                    original = dealerODCards[original].cardValue;
-                }
-                else if (dealerODCards.Count > 0)
-                {
-                    original = Random.Range(0, dealerODCards.Count);
-                    original = dealerODCards[original].cardValue;
-                }
-                else
-                {
-                    original = Random.Range(1, 14);
-                }
-            }
-            else
-            {
-                original = Random.Range(1, 14);
-            }
-            int tries = 0;
-            while (lastCardAsked == original && dealerODCards.Count > 0) 
-            {
-                original = dealerODCards[Random.Range(0, dealerODCards.Count)].cardValue;
-                tries++;
-                if (tries == 25) //Ugly, ugly way to handle this.
-                {
-                    original = Random.Range(1, 14);
-                    break;
-                }
-            }
-            lastCardAsked = original;
-            return original;
-        }
-        private static int HandleOpponentTurn(int askFor)
-        {
-            int secondNumCards = 0;
-
-            for (int i = 0; i < playerODCards.Count; i++)
-            {
-                if (playerODCards[i].cardValue == askFor)
-                {
-                    secondNumCards++;
-                    dealerODCards.Add(playerODCards[i]);
-                    playerODCards.RemoveAt(i);
-                    i--;
-                }
-            }
-
-            finalDisplay += ". You had " + secondNumCards;
-            return secondNumCards;
-        }
-
-        private static void HandlePostOpponentTurn(int secondNumCards)
-        {
-            if (secondNumCards == 0 && CardRemaining(deck))
-            {
-                dealerODCards.Add(deck.Draw());
-                finalDisplay += "\nGo fish! Your opponent drew a card.";
-            }
-            else if (!CardRemaining(deck) && secondNumCards == 0)
-            {
-                finalDisplay += "\n\nNo more cards in the deck!";
-            }
-
-            if (HasABook(true))
-            {
-                finalDisplay += "\nYour opponent completed a book! That makes " + playerBooks + " for you, and " + dealerBooks + " for your opponent.\n\n";
-            }
-
-            if (!CardRemaining(deck) && (dealerODCards.Count + playerODCards.Count == 0))
-            {
-                finalDisplay += GetGameResultMessage();
-                playingGoFish = false;
-            }
-            else
-            {
-                DisplayPlayerHand();
-            }
-        }
-
-        private static void DisplayPlayerHand()
-        {
-            finalDisplay += "\n\nYour hand: ";
-
-            List<OneDeckCard> sortedPlayerHand = playerODCards.OrderBy(card => card.cardValue).ToList();
-            for (int i = 0; i < playerODCards.Count - 1; i++)
-            {
-                finalDisplay += sortedPlayerHand[i].valueRep + " of " + sortedPlayerHand[i].suitRep + ", ";
-            }
-            finalDisplay += "and " + sortedPlayerHand[playerODCards.Count - 1].valueRep + " of " + sortedPlayerHand[playerODCards.Count - 1].suitRep;
-            finalDisplay += ".\n\nIt's your turn, request a card from your opponent. (Format 'request [card]' in words)\n\n";
-        }
-
-        private static string GetCardRepresentation(int cardValue)
-        {
-            string[] cardNames = { "aces", "twos", "threes", "fours", "fives", "sixes", "sevens", "eights", "nines", "tens", "jacks", "queens", "kings" };
-            return cardNames[cardValue - 1];
-        }
-        //End Go Fish methods
-
         //Begin Numbers methods
         public static TerminalNode BeginNumbers(Terminal __terminal)
         {
              guessableNumber = Random.Range(1, 1001);
              playingNumbers = true;
-             TerminalNode returnNode = CreateTerminalNode("I've chosen a random number between 1 and 1000.\nCan you guess it? (Format 'guess [number]')\n\n");
+             playingAdventure = false;
+            TerminalNode returnNode = CreateTerminalNode("I've chosen a random number between 1 and 1000.\nCan you guess it? (Format 'guess [number]')\n\n");
              returnNode.clearPreviousText = true;
              return returnNode;
         }
@@ -1024,371 +982,6 @@ namespace TerminalGames
         }
         //End Numbers methods
 
-        //Begin BlackJack methods
-        public static TerminalNode BetBlackjack(Terminal __terminal)
-        {
-            TerminalNode betNode = CreateTerminalNode("Welcome to BlackJack! Ready to gamble?\nEnter how many credits you would like to bet. (Format 'bet [ammount]')\n\n");
-            betNode.clearPreviousText = true;
-            ConsoleGamesMain.bettingBJ = true;
-            return betNode;
-        }
-
-        public static TerminalNode ConfirmBet(Terminal __terminal)
-        {
-            if (bettingBJ || bettingDice)
-            {
-                string input = SimpleCommand.API.SimpleCommand.GetInputValue(__terminal);
-                RemovePunctuation(input);
-                input = input.Substring(4);
-                TerminalNode confirmNode;
-                if (int.TryParse(input, out int result) && Banker.PocketWatch(__terminal, result))
-                {
-                    if (result < 0)
-                    {
-                        confirmNode = CreateTerminalNode("You can't bet a negative number.\n\n");
-                        return confirmNode;
-                    }
-                    confirmNode = CreateTerminalNode("You have bet " + result + " credits. Is this okay?\nType continue or back.\n\n");
-                    currentBet = result;
-
-                }
-                else
-                {
-                    confirmNode = CreateTerminalNode("There was an issue with your bet. Please try again.\n\n");
-                }
-                confirmNode.clearPreviousText = true;
-                return confirmNode;
-            }
-            else
-            {
-                TerminalNode rejectNode = CreateTerminalNode("There was an issue with your request.\n\n");
-                rejectNode.clearPreviousText = true;
-                return rejectNode;
-            }
-        }
-        public static TerminalNode DenyBet(Terminal __terminal)
-        {
-            if (bettingBJ || bettingDice)
-            {
-                TerminalNode rejectNode = CreateTerminalNode("Bet cancelled.\n\n");
-                currentBet = 0;
-                rejectNode.clearPreviousText = true;
-                return rejectNode;
-            }
-            else
-            {
-                TerminalNode rejectNode = CreateTerminalNode("There was an issue with your request.\n\n");
-                rejectNode.clearPreviousText = true;
-                return rejectNode;
-            }
-        }
-
-        public static TerminalNode BetConfirmed(Terminal __terminal)
-        {
-            dealerBJCards.Clear();
-            playerBJCards.Clear();
-            dealerDice.Clear();
-            playerDice.Clear();                                                    
-            if (bettingBJ)
-            {
-                playingBJ = true;
-                bettingBJ = false;
-                Banker.MoneyManip(__terminal, (currentBet * -1));
-                dealerBJCards.Add(new BJCard()); dealerBJCards.Add(new BJCard());
-                playerBJCards.Add(new BJCard()); playerBJCards.Add(new BJCard());
-                if (dealerBJCards[0].cardValue + dealerBJCards[1].cardValue == 21)
-                {
-                    TerminalNode lostNode = CreateTerminalNode("Let the game begin!\nThe dealer has BlackJack! You have lost " + currentBet + " credits.\n\n");
-                    bjGames++;
-                    creditEarnings -= currentBet;
-                    PlayerPrefs.SetInt("BJGames", bjGames); PlayerPrefs.SetInt("Earnings", creditEarnings);
-                    playingBJ = false;
-                    bettingBJ = true;
-                    lostNode.clearPreviousText = true;
-                    currentBet = 0;
-                    return lostNode;
-                }
-                else if (playerBJCards[0].cardValue + playerBJCards[1].cardValue == 21)
-                {
-                    Banker.MoneyManip(__terminal, (currentBet * 2) + currentBet / 2); //BJ pays out 3:2
-                    TerminalNode wonNode = CreateTerminalNode("Let the game begin!\nYou have " + playerBJCards[0].valueRep + " and " + playerBJCards[1].valueRep + ". BlackJack! You win " + (currentBet * 1.5) + " credits.\n\n");
-                    bjGames++;
-                    bjWins++;
-                    creditEarnings += currentBet + (currentBet/ 2);
-                    PlayerPrefs.SetInt("BJGames", bjGames); PlayerPrefs.SetInt("BJWins", bjWins); PlayerPrefs.SetInt("Earnings", creditEarnings);
-                    currentBet = 0;
-                    playingBJ = false;
-                    bettingBJ = true;
-                    wonNode.clearPreviousText = true;
-                    return wonNode;
-                }
-                TerminalNode startNode = CreateTerminalNode("Let the game begin!\nThe dealer is showing " + dealerBJCards[1].valueRep + ".\n\nYou have " + playerBJCards[0].valueRep + " and " + playerBJCards[1].valueRep + ", for a total of " + (playerBJCards[0].cardValue + playerBJCards[1].cardValue) + ".\n\nHit, or Stand?\n\n");
-                startNode.clearPreviousText = true;
-                return startNode;
-            } //For confirming blackjack
-            else if (bettingDice)
-            {
-                string finalDisplay = "Let the game begin!\nYour first roll:\n";
-                List<int> delayDisplays = new List<int>();
-                playingDice = true;
-                bettingDice = false;
-                Banker.MoneyManip(__terminal, (currentBet * -1));
-                for (int i = 0; i < 5; i++)
-                {
-                    dealerDice.Add(new Dice());
-                    playerDice.Add(new Dice());
-                    delayDisplays.Add(playerDice[i].faceValue);
-                }
-                finalDisplay += DisplayDice(delayDisplays);
-                finalDisplay += "\n\nEnter your bid (format 'bid [amount] [value]s'. Ex. ('bid two 1s').\n\n";
-                TerminalNode returnNode = CreateTerminalNode(finalDisplay);
-                returnNode.clearPreviousText = true;
-                return returnNode;
-            }
-            else
-            {
-                TerminalNode rejectNode = CreateTerminalNode("There was an issue with your request.\n\n");
-                rejectNode.clearPreviousText = true;
-                return rejectNode;
-            }
-        }
-
-        public static TerminalNode HitBlackJack(Terminal __terminal)
-        {
-            int cardTotal = 0;
-            TerminalNode resultNode;
-            if (playingBJ)
-            {
-                playerBJCards.Add(new BJCard());
-                for (int index = 0; index < playerBJCards.Count; index++)
-                {
-                    cardTotal += playerBJCards[index].cardValue;
-                }
-
-                if (cardTotal == 21) //Forces stand at 21 
-                {
-                    int dealersVal = dealerBJCards[0].cardValue + dealerBJCards[1].cardValue;
-                    playingBJ = false;
-                    bettingBJ = true;
-                    if (dealersVal >= 17)
-                    {
-                        Banker.MoneyManip(__terminal, currentBet * 2);
-                        bjGames++;
-                        bjWins++;
-                        creditEarnings += currentBet;
-                        PlayerPrefs.SetInt("BJGames", bjGames); PlayerPrefs.SetInt("BJWins", bjWins); PlayerPrefs.SetInt("Earnings", creditEarnings);
-                        resultNode = CreateTerminalNode("You hit and recieved " + playerBJCards[playerBJCards.Count - 1].valueRep + ". That's 21!\n\nDealer has " + dealersVal + ", so they stand. You win " + currentBet + " credits.\n\n");
-                        currentBet = 0;
-                    }
-                    else
-                    {
-                        string finalDisplay = "You hit and recieved " + playerBJCards[playerBJCards.Count - 1].valueRep + ". That's 21! Dealer has " + dealersVal + ", so they must draw. They draw ";  //Base of the final terminal node's text
-                        while (dealersVal < 17)
-                        {
-                            dealerBJCards.Add(new BJCard());
-                            finalDisplay += dealerBJCards[dealerBJCards.Count - 1].valueRep;   //Add what the dealer drew to the string
-                            dealersVal += dealerBJCards[dealerBJCards.Count - 1].cardValue;
-                            if (dealersVal > 21)
-                            {
-                                int cardIndex = HasAnAce(true);
-                                if (cardIndex != -1)
-                                {
-                                    dealerBJCards[cardIndex].cardValue = 1;
-                                    dealersVal -= 10;
-                                }
-                            }
-                            if (dealersVal < 17)
-                            {
-                                finalDisplay += " and ";    //If the dealer has to draw more than once add an "and" to the end
-                            }
-                        }
-                        if (dealersVal == 21)  //Dealer ties, so it's a push
-                        {
-                            Banker.MoneyManip(__terminal, currentBet);
-                            bjGames++;
-                            bjWins++;
-                            PlayerPrefs.SetInt("BJGames", bjGames); PlayerPrefs.SetInt("BJWins", bjWins);
-                            finalDisplay += ". Dealer has 21! You tied, so your bet of " + currentBet + " was returned to your account.\n\n";
-                            currentBet = 0;
-                        }
-                        else //Dealer loses, either bust or standing at less than 21
-                        {
-                            Banker.MoneyManip(__terminal, currentBet * 2);
-                            bjGames++;
-                            bjWins++;
-                            creditEarnings += currentBet;
-                            PlayerPrefs.SetInt("BJGames", bjGames); PlayerPrefs.SetInt("BJWins", bjWins); PlayerPrefs.SetInt("Earnings", creditEarnings);
-                            if (dealersVal > 21) //Bust
-                            {
-                                finalDisplay += ". Dealer has " + dealersVal + ", that's a bust! You win " + currentBet + " credits.\n\n";
-                                currentBet = 0;
-                            }
-                            else //Stand
-                            {
-                                finalDisplay += ". Dealer has " + dealersVal + ", so they must stand. You win " + currentBet + " credits.\n\n";
-                                currentBet = 0;
-                            }
-
-                        }
-                        resultNode = CreateTerminalNode(finalDisplay);
-
-                    }
-                    resultNode.clearPreviousText = true;
-                }
-                else if (cardTotal < 21) //Still playing
-                {
-                    resultNode = CreateTerminalNode("You hit and recieved " + playerBJCards[playerBJCards.Count - 1].valueRep + ", for a total of " + cardTotal + ". Hit, or stand?\n\n");
-                }
-                else //More than 21
-                {
-                    int cardIndex = HasAnAce(false);
-                    if (cardIndex != -1 && (cardTotal - 10 < 21)) //Has an ace and it saves from busting
-                    {
-                        resultNode = CreateTerminalNode("You hit and recieved " + playerBJCards[playerBJCards.Count - 1].valueRep + ", for a total of " + cardTotal + ". You have an ace, so now your total is " + (cardTotal - 10) + ". Hit, or stand?\n\n");
-                        playerBJCards[cardIndex].cardValue = 1;
-                    }
-                    else //Either has no ace or ace doesn't save them
-                    {
-                        playingBJ = false;
-                        bettingBJ = true;
-                        resultNode = CreateTerminalNode("You hit and recieved " + playerBJCards[playerBJCards.Count - 1].valueRep + ", for a total of " + cardTotal + ". That's a bust. You lost " + currentBet + " credits.\n\n");
-                        creditEarnings -= currentBet;
-                        bjGames++;
-                        PlayerPrefs.SetInt("BJGames", bjGames); PlayerPrefs.SetInt("Earnings", creditEarnings);
-                        currentBet = 0;
-                    }
-                }
-                resultNode.clearPreviousText = true;
-                return resultNode;
-            }
-            else //if not playingBJ
-            {
-                TerminalNode rejectNode = CreateTerminalNode("There was an issue with your request.\n\n");
-                rejectNode.clearPreviousText = true;
-                return rejectNode;
-            }
-
-
-        }
-
-        public static TerminalNode StandBlackJack(Terminal __terminal)
-        {
-            int finalResult = 0; //1 is a player win, 2 is a dealer win, 3 is a tie.
-            if (playingBJ)
-            {
-                TerminalNode finalNode;
-                int cardTotal = 0;
-                for (int index = 0; index < playerBJCards.Count; index++)
-                {
-                    cardTotal += playerBJCards[index].cardValue;
-                }
-                string finalDisplay = "You stood on " + cardTotal + ".";
-                int dealersVal = dealerBJCards[0].cardValue + dealerBJCards[1].cardValue;
-                if (dealersVal >= 17) //Dealer stands on all 17s.
-                {
-                    finalDisplay += " Dealer has " + dealersVal + ", so they must stand.";
-                    if (cardTotal > dealersVal) //Player wins
-                    {
-                        Banker.MoneyManip(__terminal, currentBet * 2);
-                        finalResult = 1;
-                        finalDisplay += " You won " + currentBet + " credits.\n\n";
-                        playingBJ = false;
-                        bettingBJ = true;
-                    }
-                    else if (cardTotal == dealersVal) //Tie
-                    {
-                        Banker.MoneyManip(__terminal, currentBet);
-                        finalDisplay += " Your bet of " + currentBet + " was returned to your account.\n\n";
-                        finalResult = 3;
-                    }
-                    else    //Player loses
-                    {
-                        finalDisplay += " You lost " + currentBet + " credits.\n\n";
-                        finalResult = 2;
-
-                    }
-                    playingBJ = false;
-                    bettingBJ = true;
-                }
-                else //if dealer has less than 17
-                {
-                    finalDisplay += "Dealer has " + dealersVal + ", so they must draw. They draw ";
-                    while (dealersVal < 17) //Dealer draws until they reach 17
-                    {
-                        dealerBJCards.Add(new BJCard());
-                        finalDisplay += dealerBJCards[dealerBJCards.Count - 1].valueRep;   //Add what the dealer drew to the string
-                        dealersVal += dealerBJCards[dealerBJCards.Count - 1].cardValue;
-                        if (dealersVal > 21)
-                        {
-                            int cardIndex = HasAnAce(true);
-                            if (cardIndex != -1)
-                            {
-                                dealerBJCards[cardIndex].cardValue = 1;
-                                dealersVal -= 10;
-                            }
-                        }
-                        if (dealersVal < 17)
-                        {
-                            finalDisplay += " and ";    //If the dealer has to draw more than once add an "and" to the end
-                        }
-                    }
-                    if (dealersVal > 21) //Dealer busts
-                    {
-                        Banker.MoneyManip(__terminal, currentBet * 2);
-                        finalResult = 1;
-                        finalDisplay += ". That's " + dealersVal + ", bust! You win " + currentBet + " credits.\n\n";
-
-                    }
-                    else if (dealersVal == cardTotal) //Dealer ties 
-                    {
-                        finalResult = 3;
-                        finalDisplay += ". That's " + dealersVal + ", tie! Your bet of " + currentBet + " was returned to your account.\n\n";
-                    }
-                    else if (dealersVal < cardTotal) //Dealer loses
-                    {
-                        finalResult = 1;
-                        finalDisplay += ". That's " + dealersVal + ", so the dealer must stand. You win " + currentBet + " credits.\n\n";
-                    }
-                    else //Dealer wins
-                    {
-                        finalResult = 2;
-                        finalDisplay += ". That's " + dealersVal + ", so the dealer must stand. You lose " + currentBet + " credits.\n\n";
-                    }
-                    playingBJ = false;
-                    bettingBJ = true;
-                }
-                if (finalResult == 1) //Win
-                {
-                    bjGames++;
-                    bjWins++;
-                    creditEarnings += currentBet;
-                    PlayerPrefs.SetInt("BJGames", bjGames); PlayerPrefs.SetInt("BJWins", bjWins); PlayerPrefs.SetInt("Earnings", creditEarnings);
-                }
-                else if (finalResult == 2) //Loss
-                {
-                    bjGames++;
-                    creditEarnings -= currentBet;
-                    PlayerPrefs.SetInt("BJGames", bjGames); PlayerPrefs.SetInt("Earnings", creditEarnings);
-                }
-                else //Tie (counts as a win in stats)
-                {
-                    bjGames++;
-                    bjWins++;
-                    PlayerPrefs.SetInt("BJGames", bjGames); PlayerPrefs.SetInt("BJWins", bjWins);
-                }
-                currentBet = 0;
-                finalNode = CreateTerminalNode(finalDisplay);
-                finalNode.clearPreviousText = true;
-                return finalNode;
-            }
-            else
-            {
-                TerminalNode rejectNode = CreateTerminalNode("There was an issue with your request.\n\n");
-                rejectNode.clearPreviousText = true;
-                return rejectNode;
-            }
-        }
-        //End BlackJack methods
         private void OnTerminalExit(object sender, TerminalEventArgs e)
         {
             playingBJ = false;
@@ -1396,16 +989,17 @@ namespace TerminalGames
             playingNumbers = false;
             playingGoFish = false;
             playingDice = false;
+            playingAdventure = false;
+            AdventureMethods.Save();
             //Saves stats about games played. 
             PlayerPrefs.Save();
         }
 
         private void TextSubmitted(object sender, TerminalParseSentenceEventArgs e)
         {
-            if (!ConsoleGamesMain.bjWords.Contains(e.SubmittedText))
+            if (playingAdventure) //Saves the game on every entry while playing.
             {
-                ConsoleGamesMain.playingBJ = false;
-                ConsoleGamesMain.bettingBJ = false;
+                AdventureMethods.Save();
             }
         }
 
